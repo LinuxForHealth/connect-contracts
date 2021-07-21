@@ -9,6 +9,7 @@ import { either as E } from 'fp-ts';
 
 export class CoverageContract extends Contract {
     nats_client = null;
+    nats_resends = 0;
 
     public async initLedger(ctx: Context) {
         console.info('============= START : Initialize Ledger ===========');
@@ -152,11 +153,8 @@ export class CoverageContract extends Contract {
         }
 
         if (E.isLeft(validation_result) ) {
-            console.info('validateResource: isLeft');
             throw new Error(`FHIR validation error: ${JSON.stringify(validation_result.left)}`);
-        }
-        
-        if (E.isRight(validation_result) ) {
+        } else {
             console.info(`validateResource: Successful validation: ${JSON.stringify(validation_result.right)}`);
         }
     }
@@ -170,22 +168,26 @@ export class CoverageContract extends Contract {
         let result: boolean = false;
 
         // Look up major references for validation
-        const patient: any = await this.getStateFromReference(ctx, resource.patient.reference);
-        const insurer: any = await this.getStateFromReference(ctx, resource.insurer.reference);
-        const coverage: any = await this.getStateFromReference(ctx, resource.insurance[0].coverage.reference);
-        console.info('Obtained patient, insurer and coverage objects');
+        try {
+            const patient: any = await this.getStateFromReference(ctx, resource.patient.reference);
+            const insurer: any = await this.getStateFromReference(ctx, resource.insurer.reference);
+            const coverage: any = await this.getStateFromReference(ctx, resource.insurance[0].coverage.reference);
+            console.info('Obtained patient, insurer and coverage objects');
 
-        // At this point we've found the referenced objects; make sure they contain the correct results:
-        // match the Coverage payor reference with the CoverageEligibilityRequest insurer.reference
-        // match the Coverage subscriber patient reference with the CoverageEligibilityRequest patient.reference
-        // match the Coverage period with the CoverageEligibilityRequest created date
-        if (coverage.payor[0].reference == resource.insurer.reference &&
-            coverage.subscriber.reference == resource.patient.reference &&
-            this.dateInPeriod(resource.created, coverage.period.start, coverage.period.end)) {
-            console.info('CoverageEligibilityResponse = true');
-            result = true;
-        } else {
-            console.info('CoverageEligibilityResponse = false');
+            // At this point we've found the referenced objects; make sure they contain the correct results:
+            // match the Coverage payor reference with the CoverageEligibilityRequest insurer.reference
+            // match the Coverage subscriber patient reference with the CoverageEligibilityRequest patient.reference
+            // match the Coverage period with the CoverageEligibilityRequest created date
+            if (coverage.payor[0].reference == resource.insurer.reference &&
+                coverage.subscriber.reference == resource.patient.reference &&
+                this.dateInPeriod(resource.created, coverage.period.start, coverage.period.end)) {
+                console.info('CoverageEligibilityResponse = true');
+                result = true;
+            } else {
+                console.info('CoverageEligibilityResponse = false');
+            }
+        } catch (ex) {
+            console.info(`Error obtaining coverage data, CoverageEligibilityResponse = false, exception = ${ex}`);
             result = false;
         }
         await this.sendCoverageEligibilityResponse(result, resource);
@@ -264,7 +266,7 @@ export class CoverageContract extends Contract {
             "insurance": [
               {
                 "coverage": {
-                  "reference": request.insurer.reference
+                  "reference": request.insurance[0].coverage.reference
                 },
                 "inforce": result
               }
@@ -315,8 +317,18 @@ export class CoverageContract extends Contract {
             const seq = pa.seq;
             const duplicate = pa.duplicate;
             console.log(`Published NATS message to subject: ${subject} stream: ${stream} seq: ${seq} duplicate: ${duplicate}`);
+            this.nats_resends == 0;
         } catch (ex) {
             console.log(`Error publishing to JetStream stream: ${ex}`);
+            if (ex == 'CONNECTION_CLOSED') {
+                console.log(`Reconnecting to NATS and resending message`);
+                this.nats_client = null;
+                if (this.nats_resends == 0) {
+                    // Reconnect and retry once
+                    this.nats_resends++;
+                    this.sendNATSMessage(subject, message);
+                }
+            }
         }
     }
 }
