@@ -29,7 +29,7 @@ export class EligibilityContract extends Contract {
     /*
      * Check eligibility using a FHIR CoverageEligibilityRequest and the FHIR server
      */
-    public async checkEligibility(ctx: Context, id: string, resourceStr: string) {
+    public async checkEligibility(ctx: Context, resourceStr: string) {
 
         // determine the resource type and id
         const resource: any = JSON.parse(resourceStr);
