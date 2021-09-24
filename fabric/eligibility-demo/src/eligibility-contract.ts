@@ -52,7 +52,7 @@ export class EligibilityContract extends Contract {
             const patient: any = await this.queryResourceByReference(ctx, resource.patient.reference);
             const insurer: any = await this.queryResourceByReference(ctx, resource.insurer.reference);
             const coverage: any = await this.queryResourceByReference(ctx, resource.insurance[0].coverage.reference);
-            console.info(`Obtained patient: ${patient}, insurer: ${insurer} and coverage: ${coverage} objects`);
+            console.info('Obtained patient, insurer and coverage objects');
 
             // At this point we've found the referenced objects; make sure they contain the correct results:
             // match the Coverage payor reference with the CoverageEligibilityRequest insurer.reference
@@ -94,9 +94,9 @@ export class EligibilityContract extends Contract {
         const options = { httpsAgent: this.agent };
         await axios.get(url, options)
             .then((response) => {
-                console.info(`Result: ${response.data}`);
+                console.info(`Result: ${JSON.stringify(response.data)}`);
                 console.info(`Status: ${response.status}`);
-                console.info(`Headers: ${response.headers}`);
+                console.info(`Headers: ${JSON.stringify(response.headers)}`);
                 console.info(`queryResourceByURL: resource received via url: ${url}`);
                 result = response.data;
             })
@@ -237,11 +237,11 @@ export class EligibilityContract extends Contract {
         if (!this.nats_client) {
             this.nats_client = await this.createNATSClient();
         }
-        console.log('Publishing NATS message');
         try {
-            const headers = nats.headers();
-            headers.append("Nats-Msg-Id", message.id);
-            let pa = await this.nats_client.publish(subject, new TextEncoder().encode(JSON.stringify(message)), { headers });
+            const h = nats.headers();
+            h.append("Nats-Msg-Id", message.id);
+            console.log(`Publishing NATS message with headers: ${JSON.stringify({headers: h})}`);
+            let pa = await this.nats_client.publish(subject, new TextEncoder().encode(JSON.stringify(message)), {headers: h});
             const stream = pa.stream;
             const seq = pa.seq;
             const duplicate = pa.duplicate;
