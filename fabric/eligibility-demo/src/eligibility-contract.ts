@@ -238,7 +238,7 @@ export class EligibilityContract extends Contract {
             this.nats_client = await this.createNATSClient();
         }
         try {
-            const h = nats.headers();
+            let h = nats.headers();
             h.append("Nats-Msg-Id", message.id);
             console.log(`Publishing NATS message with headers: ${JSON.stringify({headers: h})}`);
             let pa = await this.nats_client.publish(subject, new TextEncoder().encode(JSON.stringify(message)), {headers: h});
