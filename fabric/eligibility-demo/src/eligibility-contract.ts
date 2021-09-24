@@ -249,9 +249,8 @@ export class EligibilityContract extends Contract {
             this.nats_resends == 0;
         } catch (ex) {
             console.log(`Error publishing to JetStream stream: ${ex}`);
-            console.log(typeof ex)
-            if (ex == 'CONNECTION_CLOSED') {
-                console.log(`Reconnecting to NATS and resending message`);
+            if (ex.message == 'CONNECTION_CLOSED') {
+                console.log('Reconnecting to NATS and resending message');
                 this.nats_client = null;
                 if (this.nats_resends == 0) {
                     // Reconnect and retry once
